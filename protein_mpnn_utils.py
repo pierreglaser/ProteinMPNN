@@ -1159,7 +1159,8 @@ class ProteinMPNN(nn.Module):
                     h_ESV_decoder_t = cat_neighbors_nodes(h_V_stack[l], h_ES_t, E_idx_t)
                     h_V_t = torch.gather(h_V_stack[l], 1, t[:,None,None].repeat(1,1,h_V_stack[l].shape[-1]))
                     h_ESV_t = torch.gather(mask_bw, 1, t[:,None,None,None].repeat(1,1,mask_bw.shape[-2], mask_bw.shape[-1])) * h_ESV_decoder_t + h_EXV_encoder_t
-                    h_V_stack[l+1].scatter_(1, t[:,None,None].repeat(1,1,h_V.shape[-1]), layer(h_V_t, h_ESV_t, mask_V=mask_t))
+                    # h_V_stack[l+1].scatter_(1, t[:,None,None].repeat(1,1,h_V.shape[-1]), layer(h_V_t, h_ESV_t, mask_V=mask_t))
+                    h_V_stack[l+1] = torch.scatter(h_V_stack[l+1], 1, t[:,None,None].repeat(1,1,h_V.shape[-1]), layer(h_V_t, h_ESV_t, mask_V=mask_t))
                 # Sampling step
                 h_V_t = torch.gather(h_V_stack[-1], 1, t[:,None,None].repeat(1,1,h_V_stack[-1].shape[-1]))[:,0]
                 logits = self.W_out(h_V_t) / temperature
@@ -1178,12 +1179,14 @@ class ProteinMPNN(nn.Module):
                     probs_masked = probs*(1.0-omit_AA_mask_gathered)
                     probs = probs_masked/torch.sum(probs_masked, dim=-1, keepdim=True) #[B, 21]
                 S_t = torch.multinomial(probs, 1)
-                all_probs.scatter_(1, t[:,None,None].repeat(1,1,21), (chain_mask_gathered[:,:,None,]*probs[:,None,:]).float())
+                all_probs = torch.scatter(all_probs, 1, t[:,None,None].repeat(1,1,21), (chain_mask_gathered[:,:,None,]*probs[:,None,:]).float())
+                # all_probs.scatter_(1, t[:,None,None].repeat(1,1,21), (chain_mask_gathered[:,:,None,]*probs[:,None,:]).float())
             S_true_gathered = torch.gather(S_true, 1, t[:,None])
             S_t = (S_t*chain_mask_gathered+S_true_gathered*(1.0-chain_mask_gathered)).long()
             temp1 = self.W_s(S_t)
-            h_S.scatter_(1, t[:,None,None].repeat(1,1,temp1.shape[-1]), temp1)
-            S.scatter_(1, t[:,None], S_t)
+            h_S = torch.scatter(h_S, 1, t[:,None,None].repeat(1,1,temp1.shape[-1]), temp1)
+            # h_S.scatter_(1, t[:,None,None].repeat(1,1,temp1.shape[-1]), temp1)
+            S = torch.scatter(S, 1, t[:,None], S_t)
         output_dict = {"S": S, "probs": all_probs, "decoding_order": decoding_order}
         return output_dict
 
