@@ -1150,42 +1150,43 @@ class ProteinMPNN(nn.Module):
             chain_mask_gathered = torch.gather(chain_mask, 1, t[:,None]) #[B]
             mask_gathered = torch.gather(mask, 1, t[:,None]) #[B]
             bias_by_res_gathered = torch.gather(bias_by_res, 1, t[:,None,None].repeat(1,1,21))[:,0,:] #[B, 21]
-            if (mask_gathered==0).all(): #for padded or missing regions only
-                S_t = torch.gather(S_true, 1, t[:,None])
-            else:
-                # Hidden layers
-                E_idx_t = torch.gather(E_idx, 1, t[:,None,None].repeat(1,1,E_idx.shape[-1]))
-                h_E_t = torch.gather(h_E, 1, t[:,None,None,None].repeat(1,1,h_E.shape[-2], h_E.shape[-1]))
-                h_ES_t = cat_neighbors_nodes(h_S, h_E_t, E_idx_t)
-                h_EXV_encoder_t = torch.gather(h_EXV_encoder_fw, 1, t[:,None,None,None].repeat(1,1,h_EXV_encoder_fw.shape[-2], h_EXV_encoder_fw.shape[-1]))
-                mask_t = torch.gather(mask, 1, t[:,None])
-                for l, layer in enumerate(self.decoder_layers):
-                    # Updated relational features for future states
-                    h_ESV_decoder_t = cat_neighbors_nodes(h_V_stack[l], h_ES_t, E_idx_t)
-                    h_V_t = torch.gather(h_V_stack[l], 1, t[:,None,None].repeat(1,1,h_V_stack[l].shape[-1]))
-                    h_ESV_t = torch.gather(mask_bw, 1, t[:,None,None,None].repeat(1,1,mask_bw.shape[-2], mask_bw.shape[-1])) * h_ESV_decoder_t + h_EXV_encoder_t
-                    # h_V_stack[l+1].scatter_(1, t[:,None,None].repeat(1,1,h_V.shape[-1]), layer(h_V_t, h_ESV_t, mask_V=mask_t))
-                    h_V_stack[l+1] = torch.scatter(h_V_stack[l+1], 1, t[:,None,None].repeat(1,1,h_V.shape[-1]), layer(h_V_t, h_ESV_t, mask_V=mask_t))
-                # Sampling step
-                h_V_t = torch.gather(h_V_stack[-1], 1, t[:,None,None].repeat(1,1,h_V_stack[-1].shape[-1]))[:,0]
-                logits = self.W_out(h_V_t) / temperature
-                probs = F.softmax(logits-constant[None,:]*1e8+constant_bias[None,:]/temperature+bias_by_res_gathered/temperature, dim=-1)
-                if pssm_bias_flag:
-                    pssm_coef_gathered = torch.gather(pssm_coef, 1, t[:,None])[:,0]
-                    pssm_bias_gathered = torch.gather(pssm_bias, 1, t[:,None,None].repeat(1,1,pssm_bias.shape[-1]))[:,0]
-                    probs = (1-pssm_multi*pssm_coef_gathered[:,None])*probs + pssm_multi*pssm_coef_gathered[:,None]*pssm_bias_gathered
-                if pssm_log_odds_flag:
-                    pssm_log_odds_mask_gathered = torch.gather(pssm_log_odds_mask, 1, t[:,None, None].repeat(1,1,pssm_log_odds_mask.shape[-1]))[:,0] #[B, 21]
-                    probs_masked = probs*pssm_log_odds_mask_gathered
-                    probs_masked += probs * 0.001
-                    probs = probs_masked/torch.sum(probs_masked, dim=-1, keepdim=True) #[B, 21]
-                if omit_AA_mask_flag:
-                    omit_AA_mask_gathered = torch.gather(omit_AA_mask, 1, t[:,None, None].repeat(1,1,omit_AA_mask.shape[-1]))[:,0] #[B, 21]
-                    probs_masked = probs*(1.0-omit_AA_mask_gathered)
-                    probs = probs_masked/torch.sum(probs_masked, dim=-1, keepdim=True) #[B, 21]
-                S_t = torch.multinomial(probs, 1)
-                all_probs = torch.scatter(all_probs, 1, t[:,None,None].repeat(1,1,21), (chain_mask_gathered[:,:,None,]*probs[:,None,:]).float())
-                # all_probs.scatter_(1, t[:,None,None].repeat(1,1,21), (chain_mask_gathered[:,:,None,]*probs[:,None,:]).float())
+
+            # if (mask_gathered==0).all(): #for padded or missing regions only
+
+            # Hidden layers
+            E_idx_t = torch.gather(E_idx, 1, t[:,None,None].repeat(1,1,E_idx.shape[-1]))
+            h_E_t = torch.gather(h_E, 1, t[:,None,None,None].repeat(1,1,h_E.shape[-2], h_E.shape[-1]))
+            h_ES_t = cat_neighbors_nodes(h_S, h_E_t, E_idx_t)
+            h_EXV_encoder_t = torch.gather(h_EXV_encoder_fw, 1, t[:,None,None,None].repeat(1,1,h_EXV_encoder_fw.shape[-2], h_EXV_encoder_fw.shape[-1]))
+            mask_t = torch.gather(mask, 1, t[:,None])
+            for l, layer in enumerate(self.decoder_layers):
+                # Updated relational features for future states
+                h_ESV_decoder_t = cat_neighbors_nodes(h_V_stack[l], h_ES_t, E_idx_t)
+                h_V_t = torch.gather(h_V_stack[l], 1, t[:,None,None].repeat(1,1,h_V_stack[l].shape[-1]))
+                h_ESV_t = torch.gather(mask_bw, 1, t[:,None,None,None].repeat(1,1,mask_bw.shape[-2], mask_bw.shape[-1])) * h_ESV_decoder_t + h_EXV_encoder_t
+                # h_V_stack[l+1].scatter_(1, t[:,None,None].repeat(1,1,h_V.shape[-1]), layer(h_V_t, h_ESV_t, mask_V=mask_t))
+                h_V_stack[l+1] = torch.scatter(h_V_stack[l+1], 1, t[:,None,None].repeat(1,1,h_V.shape[-1]), layer(h_V_t, h_ESV_t, mask_V=mask_t))
+            # Sampling step
+            h_V_t = torch.gather(h_V_stack[-1], 1, t[:,None,None].repeat(1,1,h_V_stack[-1].shape[-1]))[:,0]
+            logits = self.W_out(h_V_t) / temperature
+            probs = F.softmax(logits-constant[None,:]*1e8+constant_bias[None,:]/temperature+bias_by_res_gathered/temperature, dim=-1)
+            if pssm_bias_flag:
+                pssm_coef_gathered = torch.gather(pssm_coef, 1, t[:,None])[:,0]
+                pssm_bias_gathered = torch.gather(pssm_bias, 1, t[:,None,None].repeat(1,1,pssm_bias.shape[-1]))[:,0]
+                probs = (1-pssm_multi*pssm_coef_gathered[:,None])*probs + pssm_multi*pssm_coef_gathered[:,None]*pssm_bias_gathered
+            if pssm_log_odds_flag:
+                pssm_log_odds_mask_gathered = torch.gather(pssm_log_odds_mask, 1, t[:,None, None].repeat(1,1,pssm_log_odds_mask.shape[-1]))[:,0] #[B, 21]
+                probs_masked = probs*pssm_log_odds_mask_gathered
+                probs_masked += probs * 0.001
+                probs = probs_masked/torch.sum(probs_masked, dim=-1, keepdim=True) #[B, 21]
+            if omit_AA_mask_flag:
+                omit_AA_mask_gathered = torch.gather(omit_AA_mask, 1, t[:,None, None].repeat(1,1,omit_AA_mask.shape[-1]))[:,0] #[B, 21]
+                probs_masked = probs*(1.0-omit_AA_mask_gathered)
+                probs = probs_masked/torch.sum(probs_masked, dim=-1, keepdim=True) #[B, 21]
+            S_t = torch.multinomial(probs, 1)
+            all_probs = torch.scatter(all_probs, 1, t[:,None,None].repeat(1,1,21), (chain_mask_gathered[:,:,None,]*probs[:,None,:]).float())
+            # all_probs.scatter_(1, t[:,None,None].repeat(1,1,21), (chain_mask_gathered[:,:,None,]*probs[:,None,:]).float())
+
             S_true_gathered = torch.gather(S_true, 1, t[:,None])
             S_t = (S_t*chain_mask_gathered+S_true_gathered*(1.0-chain_mask_gathered)).long()
             temp1 = self.W_s(S_t)
