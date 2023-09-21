@@ -147,7 +147,12 @@ def parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False):
         chain_alphabet = input_chain_list  
  
 
-    biounit_names = [path_to_pdb]
+    if not isinstance(path_to_pdb, list):
+        biounit_names = [path_to_pdb]
+    else:
+        biounit_names = path_to_pdb
+    assert isinstance(biounit_names, list)
+
     for biounit in biounit_names:
         my_dict = {}
         s = 0
@@ -375,7 +380,7 @@ def tied_featurize(batch, device, chain_dict, fixed_position_dict=None, omit_AA_
 
         m_pad = np.pad(m, [[0,L_max-l]], 'constant', constant_values=(0.0, ))
         m_pos_pad = np.pad(m_pos, [[0,L_max-l]], 'constant', constant_values=(0.0, ))
-        omit_AA_mask_pad = np.pad(np.concatenate(omit_AA_mask_list,0), [[0,L_max-l]], 'constant', constant_values=(0.0, ))
+        omit_AA_mask_pad = np.pad(np.concatenate(omit_AA_mask_list,0), [[0,L_max-l], [0, 0]], 'constant', constant_values=(0.0, ))
         chain_M[i,:] = m_pad
         chain_M_pos[i,:] = m_pos_pad
         omit_AA_mask[i,] = omit_AA_mask_pad
