@@ -228,7 +228,6 @@ def tied_featurize(batch, device, chain_dict, fixed_position_dict=None, omit_AA_
         masked_chains.sort() #sort masked_chains 
         visible_chains.sort() #sort visible_chains 
         all_chains = masked_chains + visible_chains
-    for i, b in enumerate(batch):
         mask_dict = {}
         a = 0
         x_chain_list = []
